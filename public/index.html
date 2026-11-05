@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CampusEats Catalogue</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>CampusEats Catalogue</h1>
+  <p class="sub">The menu &mdash; served by a REST API (Node + Express)</p>
+
+  <div class="filters">
+    <button type="button" data-filter="" class="active">All</button>
+    <button type="button" data-filter="true">Veg only</button>
+    <button type="button" data-filter="false">Non-veg</button>
+  </div>
+
+  <div id="list">Loading&hellip;</div>
+
+  <form id="addForm">
+    <h3>Add a dish</h3>
+    <input id="name" placeholder="Dish name" required>
+    <input id="price" type="number" min="0" placeholder="Price (rupees)">
+    <label><input id="veg" type="checkbox" checked> Veg</label>
+    <button type="submit">Add dish</button>
+    <p class="error" id="error"></p>
+  </form>
+
+  <script>
+    let filter = '';
+
+    // escape text before putting it into innerHTML
+    const esc = s => String(s).replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    // 1. READ: GET /items (optionally ?veg=true/false), then draw the list
+    async function load() {
+      const res = await fetch('/items' + (filter ? '?veg=' + filter : ''));
+      const items = await res.json();
+      document.getElementById('list').innerHTML = items.length
+        ? items.map(i =>
+            `<div class="dish${i.veg ? '' : ' nonveg'}"><span class="name">${esc(i.name)}</span>` +
+            `<span class="right"><span class="price">&#8377;${esc(i.price)}</span>` +
+            `<button class="del" data-id="${i.id}" title="Delete">&times;</button></span></div>`).join('')
+        : '<p class="sub">No dishes.</p>';
+    }
+
+    // 2. WRITE: the form POSTs a new dish, then refreshes the list
+    document.getElementById('addForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name  = document.getElementById('name').value.trim();
+      const price = document.getElementById('price').value;
+      const veg   = document.getElementById('veg').checked;
+      const res = await fetch('/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, price, veg })
+      });
+      const err = document.getElementById('error');
+      if (!res.ok) { err.textContent = (await res.json()).error; return; }
+      err.textContent = '';
+      e.target.reset();
+      load();
+    });
+
+    // 3. DELETE: remove a dish, then refresh
+    document.getElementById('list').addEventListener('click', async (e) => {
+      if (!e.target.matches('.del')) return;
+      await fetch('/items/' + e.target.dataset.id, { method: 'DELETE' });
+      load();
+    });
+
+    // 4. FILTER buttons: GET /items?veg=...
+    document.querySelectorAll('.filters button').forEach(b =>
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.filters button').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        filter = b.dataset.filter;
+        load();
+      }));
+
+    load();
+  </script>
+</body>
+</html>
